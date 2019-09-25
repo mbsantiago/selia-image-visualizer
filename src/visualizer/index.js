@@ -1,5 +1,5 @@
 import React from 'react';
-import VisualizerBase from '../VisualizerBase';
+import VisualizerBase from '@selia/visualizer';
 
 import ImageVisualizerToolbar from './ImageVisualizerToolbar';
 import { NAME, VERSION, DESCRIPTION, CONFIGURATION_SCHEMA } from './ImageVisualizerInfo';
@@ -10,6 +10,10 @@ class ImageVisualizer extends VisualizerBase {
   version = VERSION;
   description = DESCRIPTION;
   configuration_schema = CONFIGURATION_SCHEMA;
+
+  constructor(config) {
+    super(config);
+  }
 
   centerImage() {
     this.setTransform(1, 0, 0, 1, 0, 0);
