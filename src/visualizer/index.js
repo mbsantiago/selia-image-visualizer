@@ -11,35 +11,46 @@ class ImageVisualizer extends VisualizerBase {
   description = DESCRIPTION;
   configuration_schema = CONFIGURATION_SCHEMA;
 
-  constructor(config) {
-    super(config);
-  }
-
   centerImage() {
     this.setTransform(1, 0, 0, 1, 0, 0);
-    this.factor = 1;
-
     let x = (this.canvas.width - this.image.width) / 2;
     let y = (this.canvas.height - this.image.height) / 2;
-    let p = this.createPoint(x, y );
-
+    let p = this.createPoint(x, y);
     this.translate(p);
+
+    let xFactor = this.canvas.width / this.image.width;
+    let yFactor = this.canvas.height / this.image.height;
+    let factor = Math.min(xFactor, yFactor);
+
+    this._zoom(factor, this.getCenterPoint())
+    this.setFactor(1);
+
     this.emitUpdateEvent();
     this.draw();
   }
 
   renderToolbar() {
-    return (
+    this.toolbar = (
       <ImageVisualizerToolbar
         active={this.active}
         activator={this.activator}
         home={() => this.centerImage()}
+        zoom={(clicks) => this.zoom(clicks, this.getCenterPoint())}
       />
     );
+
+    return this.toolbar;
+  }
+
+  getCenterPoint() {
+    let x = this.canvas.width / 2;
+    let y = this.canvas.height / 2;
+
+    return this.createPoint(x, y);
   }
 
   getItemUrl(){
-    return this.itemInfo.url + 'download/';
+    return this.itemInfo.url;
   }
 
   getEvents() {
@@ -80,30 +91,53 @@ class ImageVisualizer extends VisualizerBase {
 
   onMouseUp(event) {
     this.dragStart = null;
-    if (!this.dragged) this.zoom(event.shiftKey ? -1 : 1);
+    if (!this.dragged) this.zoom(event.shiftKey ? -1 : 1, this.last);
   }
 
   onMouseScroll(event) {
     var delta = event.wheelDelta ? event.wheelDelta / 40 : event.detail ? -event.detail : 0;
-    if (delta) this.zoom(delta);
+    if (delta) this.zoom(delta, this.last);
 
     return event.preventDefault() && false;
   }
 
-  zoom(clicks) {
+  zoom(clicks, point) {
     var scaleFactor = 1.1;
     var factor = Math.pow(scaleFactor, clicks);
 
-    if (this.factor * factor < 0.5) return;
-    if (this.factor * factor > 5) return;
+    if (this.factor * factor < 0.5) {
+      this.factor = 0.5;
+      return;
+    }
 
-    this.factor = this.factor * factor;
-    var pt = this.canvasToPoint(this.last);
+    if (this.factor * factor > 5) {
+      this.factor = 5;
+      return;
+    }
+
+    this.setFactor(this.factor * factor);
+    this._zoom(factor, point)
+    this.emitUpdateEvent()
+    this.draw();
+  }
+
+  setFactor(factor) {
+    this.factor = factor;
+
+    if (this.toolbar) {
+      console.log(this.toolbar);
+      this.toolbar.setState({
+        plus: this.factor === 5,
+        minus: this.factor === 0.5
+      });
+    }
+  }
+
+  _zoom(factor, point) {
+    var pt = this.canvasToPoint(point);
     this.translate(pt);
     this.scale(factor, factor);
     this.translate({x: -pt.x, y: -pt.y});
-    this.emitUpdateEvent()
-    this.draw();
   }
 
   scale(x, y) {
@@ -202,7 +236,7 @@ class ImageVisualizer extends VisualizerBase {
       matrix.e,
       matrix.f)
 
-    this.factor = Math.sqrt(matrix.a * matrix.d - matrix.b * matrix.c);
+    this.setFactor(Math.sqrt(matrix.a * matrix.d - matrix.b * matrix.c));
 
     this.draw();
     this.emitUpdateEvent()
@@ -223,7 +257,7 @@ class ImageVisualizer extends VisualizerBase {
     this.transformHistory = [];
 
     this.last = this.createPoint(this.canvas.width / 2, this.canvas.height / 2);
-    this.factor = 1;
+    this.setFactor(1);
 
     this.dragStart = null;
     this.dragged = false;

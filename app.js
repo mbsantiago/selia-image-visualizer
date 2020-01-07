@@ -4,8 +4,17 @@ const path = require('path');
 const app = express()
 const port = 3000
 
-app.get('/download/', function (req, res) {
-  var files = fs.readdirSync(path.join(__dirname, 'public', 'files'));
+
+function filterUnwantedFiles(filename) {
+  if (filename.includes('DS_Store')) return false;
+
+  return true;
+}
+
+
+app.get('/', function (req, res) {
+  var files = fs.readdirSync(path.join(__dirname, 'public', 'files'))
+    .filter((filename) => filterUnwantedFiles(filename))
   res.sendFile(path.join(__dirname, 'public', 'files', files[0]));
 })
 
