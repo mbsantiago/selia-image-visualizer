@@ -123,14 +123,6 @@ class ImageVisualizer extends VisualizerBase {
 
   setFactor(factor) {
     this.factor = factor;
-
-    if (this.toolbar) {
-      console.log(this.toolbar);
-      this.toolbar.setState({
-        plus: this.factor === 5,
-        minus: this.factor === 0.5
-      });
-    }
   }
 
   _zoom(factor, point) {

@@ -54,7 +54,6 @@ class ImageVisualizerToolbar extends React.Component {
         type="button"
         className="btn btn-light m-1"
         onClick={() => this.props.zoom(2)}
-        disabled={this.props.zoomStatus.plus}
       >
         <i className="fas fa-search-plus"></i>
       </button>
