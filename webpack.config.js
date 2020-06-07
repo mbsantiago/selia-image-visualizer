@@ -31,7 +31,7 @@ const config = {
     contentBase: path.join(__dirname, 'public'),
     compress: true,
     hot: true,
-    port: 9000
+    port: 9001
   },
 };
 

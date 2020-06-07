@@ -2,261 +2,454 @@ import React from 'react';
 import VisualizerBase from '@selia/visualizer';
 
 import ImageVisualizerToolbar from './ImageVisualizerToolbar';
-import { NAME, VERSION, DESCRIPTION, CONFIGURATION_SCHEMA } from './ImageVisualizerInfo';
+import {
+  NAME, VERSION, DESCRIPTION, CONFIGURATION_SCHEMA,
+} from './ImageVisualizerInfo';
+
+
+const MAX_SCALE = 50;
+const MIN_SCALE = 0.5;
+const SCALE_FACTOR = 0.05;
+const HISTORY_LENGHT = 20;
+
+const MOVING = 'moving';
+const ZOOMING = 'zooming';
 
 
 class ImageVisualizer extends VisualizerBase {
   name = NAME;
+
   version = VERSION;
+
   description = DESCRIPTION;
-  configuration_schema = CONFIGURATION_SCHEMA;
 
-  centerImage() {
-    this.setTransform(1, 0, 0, 1, 0, 0);
-    let x = (this.canvas.width - this.image.width) / 2;
-    let y = (this.canvas.height - this.image.height) / 2;
-    let p = this.createPoint(x, y);
-    this.translate(p);
+  configurationSchema = CONFIGURATION_SCHEMA;
 
-    let xFactor = this.canvas.width / this.image.width;
-    let yFactor = this.canvas.height / this.image.height;
-    let factor = Math.min(xFactor, yFactor);
+  init() {
+    this.canvas.style.cssText = '-moz-box-shadow: inset 0 0 7px #404040;'
+      + '-webkit-box-shadow: inset 0 0 7px #404040;'
+      + 'box-shadow:         inset 0 0 7px #404040;'
+      + 'background-color: gray';
 
-    this._zoom(factor, this.getCenterPoint())
-    this.setFactor(1);
+    this.ctx = this.canvas.getContext('2d');
+    this.image = new Image();
+    this.image.src = this.getItemUrl();
 
-    this.emitUpdateEvent();
+    this.stateHistory = [];
+    this.toolbar = React.createRef();
+
+    this.last = this.createPoint(0.5, 0.5);
+    this.ratio = 1;
+    this.imgSize = null;
+
+    this.state = MOVING;
+
+    this.config = {
+      scale: 1.0,
+      xOffset: 0,
+      yOffset: 0,
+      rotation: 0,
+    };
+
+    this.dragging = {
+      point: null,
+      active: false,
+    };
+
+    this.zooming = {
+      start: null,
+      end: null,
+      active: false,
+    };
+
+    this.image.onload = () => {
+      this.imgSize = this.getImgSize();
+      this.ratio = this.getRatio();
+      this.draw();
+    };
+  }
+
+  saveState() {
+    this.stateHistory.push({ ...this.config });
+
+    if (this.stateHistory.length > HISTORY_LENGHT) {
+      this.stateHistory.shift();
+    }
+  }
+
+  restoreState() {
+    if (this.stateHistory.length > 0) {
+      this.setConfig(this.stateHistory.pop());
+    } else {
+      this.resetConfig();
+    }
+
     this.draw();
+    this.emitUpdateEvent();
   }
 
-  renderToolbar() {
-    this.toolbar = (
-      <ImageVisualizerToolbar
-        active={this.active}
-        activator={this.activator}
-        home={() => this.centerImage()}
-        zoom={(clicks) => this.zoom(clicks, this.getCenterPoint())}
-      />
+  discardState() {
+    if (this.stateHistory.length > 0) {
+      this.stateHistory.pop();
+    }
+  }
+
+  draw() {
+    this.clear();
+    this.setTransformFromState();
+    this.drawImage();
+
+    if (this.state === ZOOMING && this.zooming.active) {
+      this.drawZoomRect();
+    }
+  }
+
+  drawImage() {
+    const { widthRel, heightRel } = this.imgSize;
+    this.ctx.drawImage(this.image, -widthRel / 2, -heightRel / 2, widthRel, heightRel);
+  }
+
+  drawZoomRect() {
+    const start = this.transformCanvasToPoint(this.zooming.start);
+    const end = this.transformCanvasToPoint(this.zooming.end);
+
+    this.ctx.strokeStyle = 'red';
+    this.ctx.lineWidth = 0.001;
+    this.ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+  }
+
+  onWindowResize() {
+    this.adjustSize();
+    this.ratio = this.getRatio();
+    this.draw();
+    this.emitUpdateEvent();
+  }
+
+  setTransformFromState() {
+    const { width, height } = this.canvas;
+    const { scale, xOffset, yOffset, rotation } = this.config;
+
+    const xShift = (width / 2) + (xOffset * width);
+    const yShift = (height / 2) + (yOffset * height);
+
+    const ratio = this.ratio * scale;
+    const radians = (rotation * Math.PI) / 180;
+
+    this.ctx.setTransform(
+      Math.cos(radians) * ratio,
+      Math.sin(radians) * ratio,
+      -Math.sin(radians) * ratio,
+      Math.cos(radians) * ratio,
+      xShift,
+      yShift,
     );
-
-    return this.toolbar;
   }
 
-  getCenterPoint() {
-    let x = this.canvas.width / 2;
-    let y = this.canvas.height / 2;
-
-    return this.createPoint(x, y);
-  }
-
-  getItemUrl(){
-    return this.itemInfo.url;
+  setState(state) {
+    this.state = state;
   }
 
   getEvents() {
-    this.onMouseDown = this.onMouseDown.bind(this);
-    this.onMouseMove = this.onMouseMove.bind(this);
-    this.onMouseUp = this.onMouseUp.bind(this);
-    this.onMouseScroll = this.onMouseScroll.bind(this);
-
     return {
-      'mousedown': this.onMouseDown,
-      'mousemove': this.onMouseMove,
-      'mouseup': this.onMouseUp,
-      'DOMMouseScroll': this.onMouseScroll,
-      'mousewheel': this.onMouseScroll,
+      mousedown: this.onMouseDown.bind(this),
+      mousemove: this.onMouseMove.bind(this),
+      mouseup: this.onMouseUp.bind(this),
+      mouseout: this.onMouseOut.bind(this),
+      DOMMouseScroll: this.onMouseScroll.bind(this),
+      mousewheel: this.onMouseScroll.bind(this),
+    };
+  }
+
+  onMouseOut() {
+    if (this.state === MOVING) {
+      this.dragging.point = null;
     }
   }
 
   onMouseDown(event) {
-    document.body.style.mozUserSelect = document.body.style.webkitUserSelect = document.body.style.userSelect = 'none';
     this.last = this.getMouseEventPosition(event);
-    this.dragStart = this.canvasToPoint(this.last);
-    this.dragged = false;
+
+    this.canvasToPoint(this.last);
+
+    if (this.state === MOVING) {
+      this.dragging.point = this.last;
+      this.dragging.active = false;
+      this.saveState();
+      return;
+    }
+
+    if (this.state === ZOOMING) {
+      this.zooming.start = this.last;
+    }
   }
 
   onMouseMove(event) {
     this.last = this.getMouseEventPosition(event);
-    this.dragged = true;
 
-    if (this.dragStart) {
-      var pt = this.canvasToPoint(this.last);
-      pt.x -= this.dragStart.x;
-      pt.y -= this.dragStart.y;
-      this.translate(pt);
-      this.emitUpdateEvent()
+    if (this.state === MOVING && this.dragging.point) {
+      this.translate(
+        this.last.x - this.dragging.point.x,
+        this.last.y - this.dragging.point.y,
+      );
+
+      this.dragging.active = true;
+      this.dragging.point = this.last;
+
+      this.draw();
+      this.emitUpdateEvent();
+      return;
+    }
+
+    if (this.state === ZOOMING && this.zooming.start) {
+      this.zooming.end = this.last;
+      this.zooming.active = true;
       this.draw();
     }
   }
 
   onMouseUp(event) {
-    this.dragStart = null;
-    if (!this.dragged) this.zoom(event.shiftKey ? -1 : 1, this.last);
+    if (this.state === MOVING) {
+      this.dragging.point = null;
+      if (!this.dragging.active) {
+        this.discardState();
+        this.zoom(event.shiftKey ? -1 : 1, this.last);
+      }
+      return;
+    }
+
+    if (this.state === ZOOMING) {
+      this.saveState();
+      this.zoomOnRect();
+      this.zooming = {
+        start: null,
+        end: null,
+        active: false,
+      };
+      this.draw();
+      this.emitUpdateEvent();
+    }
   }
 
   onMouseScroll(event) {
-    var delta = event.wheelDelta ? event.wheelDelta / 40 : event.detail ? -event.detail : 0;
-    if (delta) this.zoom(delta, this.last);
-
-    return event.preventDefault() && false;
-  }
-
-  zoom(clicks, point) {
-    var scaleFactor = 1.1;
-    var factor = Math.pow(scaleFactor, clicks);
-
-    if (this.factor * factor < 0.5) {
-      this.factor = 0.5;
-      return;
+    let delta = 0;
+    if (event.wheelDelta) {
+      delta = event.wheelDelta / 80;
+    } else if (event.detail) {
+      delta = -event.detail;
     }
 
-    if (this.factor * factor > 5) {
-      this.factor = 5;
-      return;
+    if (delta) {
+      this.saveState();
+      this.zoom(delta, this.last);
     }
 
-    this.setFactor(this.factor * factor);
-    this._zoom(factor, point)
-    this.emitUpdateEvent()
-    this.draw();
+    event.preventDefault();
   }
 
-  setFactor(factor) {
-    this.factor = factor;
+  getImgSize() {
+    const { height, width } = this.image;
+    const factor = Math.max(height, width);
+
+    return {
+      height,
+      width,
+      factor,
+      heightRel: height / factor,
+      widthRel: width / factor,
+    };
   }
 
-  _zoom(factor, point) {
-    var pt = this.canvasToPoint(point);
-    this.translate(pt);
-    this.scale(factor, factor);
-    this.translate({x: -pt.x, y: -pt.y});
+  getRatio() {
+    const canvasWidth = this.canvas.width;
+    const canvasHeight = this.canvas.height;
+
+    const { width, height, factor } = this.imgSize;
+
+    const yRatio = canvasHeight / height;
+    const xRatio = canvasWidth / width;
+    return yRatio < xRatio ? yRatio * factor : xRatio * factor;
   }
 
-  scale(x, y) {
-    this.transformMatrix = this.transformMatrix.scaleNonUniform(x, y);
-    this.ctx.scale(x, y);
-  }
-
-  translate(p) {
-    this.transformMatrix = this.transformMatrix.translate(p.x, p.y);
-    this.ctx.translate(p.x, p.y);
-  }
-
-  rotate(radians) {
-    this.transformMatrix = this.transformMatrix.rotate(radians * 180 / Math.PI);
-    this.ctx.rotate(radians);
-  }
-
-  transform(a, b, c, d, e, f) {
-    var matrix = this.svg.createSVGMatrix();
-    matrix.a = a;
-    matrix.b = b;
-    matrix.c = c;
-    matrix.d = d;
-    matrix.e = e;
-    matrix.f = f;
-    this.transformMatrix = this.transformMatrix.multiply(matrix);
-    return this.ctx.transform(a, b, c, d, e, f);
-  }
-
-  setTransform(a, b, c, d, e, f) {
-    this.transformMatrix.a = a;
-    this.transformMatrix.b = b;
-    this.transformMatrix.c = c;
-    this.transformMatrix.d = d;
-    this.transformMatrix.e = e;
-    this.transformMatrix.f = f;
-
-    this.ctx.setTransform(a, b, c, d, e, f);
-  }
-
-  canvasToPoint(p) {
-    var pt = this.createPoint(p.x, p.y)
-    return pt.matrixTransform(this.transformMatrix.inverse());
-  }
-
-  pointToCanvas(p) {
-    var pt = this.createPoint(p.x, p.y)
-    return pt.matrixTransform(this.transformMatrix);
-  }
-
-  draw() {
-    this.save();
-    this.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.restore();
-
-    this.ctx.drawImage(this.image, 0, 0);
-  }
-
-  save() {
-    this.transformHistory.push(this.transformMatrix.translate(0, 0));
+  clear() {
     this.ctx.save();
-  }
-
-  restore() {
-    this.transformMatrix = this.transformHistory.pop();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.restore();
   }
 
+  resetConfig() {
+    this.config = {
+      scale: 1,
+      xOffset: 0,
+      yOffset: 0,
+      rotation: 0,
+    };
+  }
+
+  centerImage() {
+    this.resetConfig();
+    this.draw();
+    this.emitUpdateEvent();
+  }
+
+  renderToolbar() {
+    return (
+      <ImageVisualizerToolbar
+        active={this.active}
+        activator={this.activator}
+        state={this.state}
+        setState={(state) => this.setState(state)}
+        home={() => this.centerImage()}
+        restoreState={() => this.restoreState()}
+        zoom={(clicks) => this.zoom(clicks, this.getCenterPoint())}
+        ref={(ref) => { this.toolbar = ref; }}
+      />
+    );
+  }
+
+  getCenterPoint() {
+    return this.createPoint(0.5, 0.5);
+  }
+
+  getItemUrl() {
+    return this.itemInfo.url;
+  }
+
+  setScale(scale) {
+    const prevScale = this.config.scale;
+    const newScale = Math.min(Math.max(scale, MIN_SCALE), MAX_SCALE);
+    const ratio = newScale / prevScale;
+    this.config.scale = newScale;
+    this.config.xOffset *= ratio;
+    this.config.yOffset *= ratio;
+  }
+
+  setXOffset(xOffset) {
+    this.config.xOffset = xOffset;
+  }
+
+  setYOffset(yOffset) {
+    this.config.yOffset = yOffset;
+  }
+
+  setRotation(rotation) {
+    this.config.rotation = rotation % 360;
+  }
+
+  zoom(clicks, point) {
+    const { scale, xOffset, yOffset } = this.config;
+    const factor = SCALE_FACTOR * clicks;
+
+    const pointXOffset = -(point.x - 0.5 - xOffset) * (factor / scale);
+    const pointYOffset = -(point.y - 0.5 - yOffset) * (factor / scale);
+
+    if (factor + scale > MAX_SCALE) return;
+    if (factor + scale < MIN_SCALE) return;
+
+    this.config.scale = factor + scale;
+    this.translate(pointXOffset, pointYOffset);
+
+    this.emitUpdateEvent();
+    this.draw();
+  }
+
+  zoomOnRect() {
+    const { start, end } = this.zooming;
+    const { scale } = this.config;
+    const center = this.createPoint(
+      (start.x + end.x) / 2,
+      (start.y + end.y) / 2,
+    );
+
+    const width = Math.abs(end.x - start.x);
+    const height = Math.abs(end.y - start.y);
+
+    const canvasWidth = this.canvas.width;
+    const canvasHeight = this.canvas.height;
+
+    const yFactor = canvasHeight / height;
+    const xFactor = canvasWidth / width;
+
+    const factor = yFactor < xFactor ? height : width;
+    const newScale = scale / factor;
+
+    this.centerOnPoint(center);
+    this.setScale(newScale);
+    this.setState(MOVING);
+
+    if (this.toolbar.setState) {
+      this.toolbar.setState({ state: MOVING });
+    }
+  }
+
+  centerOnPoint(point) {
+    const { width, height } = this.imgSize;
+    const center = this.pointToCanvas(this.createPoint(
+      width / 2,
+      height / 2,
+    ));
+
+    const x = center.x - point.x;
+    const y = center.y - point.y;
+
+    this.setXOffset(x);
+    this.setYOffset(y);
+  }
+
+  translate(x, y) {
+    const { xOffset, yOffset } = this.config;
+    this.setXOffset(xOffset + x);
+    this.setYOffset(yOffset + y);
+  }
+
+  transformCanvasToPoint(p) {
+    const transform = this.ctx.getTransform();
+    const canvasPoint = this.coordsToPixel(p);
+    return canvasPoint.matrixTransform(transform.invertSelf());
+  }
+
+  rotate(angle) {
+    this.setRotation(this.config.rotation + angle);
+  }
+
+  canvasToPoint(p) {
+    const { width, height, factor } = this.imgSize;
+    const pt = this.transformCanvasToPoint(p);
+
+    pt.x += width / (2 * factor);
+    pt.y += height / (2 * factor);
+
+    pt.x *= factor;
+    pt.y *= factor;
+
+    return pt;
+  }
+
+  pointToCanvas(p) {
+    const { widthRel, heightRel, factor } = this.imgSize;
+    const transform = this.ctx.getTransform();
+
+    const pt = this.createPoint(
+      p.x / factor - widthRel / 2,
+      p.y / factor - heightRel / 2,
+    );
+    const pixels = pt.matrixTransform(transform);
+
+    return this.pixelToCoords(pixels);
+  }
+
   validatePoints(p) {
-    let x = Math.min(Math.max(p.x, 0), this.image.width);
-    let y = Math.min(Math.max(p.y, 0), this.image.height);
+    const x = Math.min(Math.max(p.x, 0), this.image.width);
+    const y = Math.min(Math.max(p.y, 0), this.image.height);
     return this.createPoint(x, y);
   }
 
   getConfig() {
-    return {
-      transformMatrix: {
-        a: this.transformMatrix.a,
-        b: this.transformMatrix.b,
-        c: this.transformMatrix.c,
-        d: this.transformMatrix.d,
-        e: this.transformMatrix.e,
-        f: this.transformMatrix.f,
-      }
-    }
+    return this.config;
   }
 
   setConfig(config) {
-    let matrix = config.transformMatrix;
-    this.setTransform(
-      matrix.a,
-      matrix.b,
-      matrix.c,
-      matrix.d,
-      matrix.e,
-      matrix.f)
-
-    this.setFactor(Math.sqrt(matrix.a * matrix.d - matrix.b * matrix.c));
-
-    this.draw();
-    this.emitUpdateEvent()
-  }
-
-  init() {
-    this.canvas.style.cssText = '-moz-box-shadow: inset 0 0 7px #404040;' +
-      '-webkit-box-shadow: inset 0 0 7px #404040;' +
-      'box-shadow:         inset 0 0 7px #404040;' +
-      'background-color: gray';
-
-    this.ctx = this.canvas.getContext('2d');
-
-    this.image = new Image();
-    this.image.src = this.getItemUrl();
-
-    this.transformMatrix = this.svg.createSVGMatrix();
-    this.transformHistory = [];
-
-    this.last = this.createPoint(this.canvas.width / 2, this.canvas.height / 2);
-    this.setFactor(1);
-
-    this.dragStart = null;
-    this.dragged = false;
-
-    this.image.onload = () => {
-      this.centerImage();
-    }
+    this.config = config;
   }
 }
 

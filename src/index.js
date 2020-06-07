@@ -14,7 +14,7 @@ import(/* webpackIgnore: true */'/visualizer.js').then(module => {
     canvas: document.getElementById('visualizerCanvas'),
     active: true,
     itemInfo: {
-      url: 'http://localhost:3000/',
+      url: 'https://homepages.cae.wisc.edu/~ece533/images/baboon.png',
     }
   }
 
