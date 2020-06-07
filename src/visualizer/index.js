@@ -490,6 +490,30 @@ class ImageVisualizer extends VisualizerBase {
   setConfig(config) {
     this.config = config;
   }
+
+  activate() {
+    VisualizerBase.prototype.activate.call(this);
+
+    if (this.toolbar.setState) {
+      this.toolbar.setState({ active: true });
+    }
+  }
+
+  deactivate() {
+    VisualizerBase.prototype.deactivate.call(this);
+
+    if (this.toolbar.setState) {
+      this.toolbar.setState({ active: false });
+    }
+  }
+
+  toggleActivate() {
+    VisualizerBase.prototype.toggleActivate.call(this);
+
+    if (this.toolbar.setState) {
+      this.toolbar.setState((prevState) => ({ active: !prevState.active }));
+    }
+  }
 }
 
 
