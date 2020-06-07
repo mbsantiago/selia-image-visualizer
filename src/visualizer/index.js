@@ -26,9 +26,9 @@ class ImageVisualizer extends VisualizerBase {
   configurationSchema = CONFIGURATION_SCHEMA;
 
   init() {
-    this.canvas.style.cssText = '-moz-box-shadow: inset 0 0 7px #404040;'
+    this.canvas.style.cssText += '-moz-box-shadow: inset 0 0 7px #404040;'
       + '-webkit-box-shadow: inset 0 0 7px #404040;'
-      + 'box-shadow:         inset 0 0 7px #404040;'
+      + 'box-shadow: inset 0 0 7px #404040;'
       + 'background-color: gray';
 
     this.ctx = this.canvas.getContext('2d');
@@ -62,10 +62,12 @@ class ImageVisualizer extends VisualizerBase {
       active: false,
     };
 
+    this.draw();
+
     this.image.onload = () => {
       this.imgSize = this.getImgSize();
       this.ratio = this.getRatio();
-      this.draw();
+      this.ready = true;
     };
   }
 
@@ -95,6 +97,11 @@ class ImageVisualizer extends VisualizerBase {
   }
 
   draw() {
+    if (!this.ready) {
+      this.drawLoading();
+      return;
+    }
+
     this.clear();
     this.setTransformFromState();
     this.drawImage();
@@ -102,6 +109,38 @@ class ImageVisualizer extends VisualizerBase {
     if (this.state === ZOOMING && this.zooming.active) {
       this.drawZoomRect();
     }
+  }
+
+  drawLoading(timestamp) {
+    const { width, height } = this.canvas;
+
+    if (this.ready) {
+      this.draw();
+      return;
+    }
+
+    this.clear();
+
+    let shift = 0;
+    if (timestamp !== null) {
+      shift = timestamp / 300;
+    }
+
+    const angle = Math.PI / 2;
+    const innerRadius = 20;
+    const outerRadius = 30;
+
+    this.ctx.beginPath();
+    this.ctx.arc(width / 2, height / 2, innerRadius, shift, shift + angle);
+    this.ctx.arc(width / 2, height / 2, outerRadius, shift + angle, shift, true);
+    this.ctx.fill();
+
+    this.ctx.beginPath();
+    this.ctx.arc(width / 2, height / 2, innerRadius, shift + 2 * angle, shift + 3 * angle);
+    this.ctx.arc(width / 2, height / 2, outerRadius, shift + 3 * angle, shift + 2 * angle, true);
+    this.ctx.fill();
+
+    requestAnimationFrame((time) => this.drawLoading(time));
   }
 
   drawImage() {
