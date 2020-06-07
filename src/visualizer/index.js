@@ -349,8 +349,8 @@ class ImageVisualizer extends VisualizerBase {
     this.config.scale = factor + scale;
     this.translate(pointXOffset, pointYOffset);
 
-    this.emitUpdateEvent();
     this.draw();
+    this.emitUpdateEvent();
   }
 
   zoomOnRect() {

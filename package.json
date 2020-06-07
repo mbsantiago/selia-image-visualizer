@@ -1,6 +1,6 @@
 {
   "name": "@selia/image-visualizer",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Image Visualizer",
   "main": "index.js",
   "scripts": {
