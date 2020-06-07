@@ -1,5 +1,5 @@
 {
-  "name": "selia-image-visualizer",
+  "name": "@selia/image-visualizer",
   "version": "2.1.0",
   "description": "Image Visualizer",
   "main": "index.js",
@@ -10,6 +10,7 @@
   "keywords": [
     "selia",
     "visualizers",
+    "image",
     "js",
     "vis"
   ],
