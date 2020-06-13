@@ -1,92 +1,78 @@
-const NAME = 'Visualizador de imagenes SELIA';
-const VERSION = '1.0';
-const DESCRIPTION = 'Visualizador web que usa el contexto 2d' +
-  ' de un canvas HTML5 para presentar imagenes png/jpg';
-const CONFIGURATION_SCHEMA = {
-  "definitions": {},
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "http://example.com/root.json",
-  "type": "object",
-  "title": "The Root Schema",
-  "required": [
-    "transformMatrix"
-  ],
-  "properties": {
-    "transformMatrix": {
-      "$id": "#/properties/transformMatrix",
-      "type": "object",
-      "title": "The Transformatrix Schema",
-      "required": [
-        "a",
-        "b",
-        "c",
-        "d",
-        "e",
-        "f"
-      ],
-      "properties": {
-        "a": {
-          "$id": "#/properties/transformMatrix/properties/a",
-          "type": "number",
-          "title": "The A Schema",
-          "default": 0,
-          "examples": [
-            1
-          ]
-        },
-        "b": {
-          "$id": "#/properties/transformMatrix/properties/b",
-          "type": "number",
-          "title": "The B Schema",
-          "default": 0,
-          "examples": [
-            0
-          ]
-        },
-        "c": {
-          "$id": "#/properties/transformMatrix/properties/c",
-          "type": "number",
-          "title": "The C Schema",
-          "default": 0,
-          "examples": [
-            0
-          ]
-        },
-        "d": {
-          "$id": "#/properties/transformMatrix/properties/d",
-          "type": "number",
-          "title": "The D Schema",
-          "default": 0,
-          "examples": [
-            1
-          ]
-        },
-        "e": {
-          "$id": "#/properties/transformMatrix/properties/e",
-          "type": "number",
-          "title": "The E Schema",
-          "default": 0,
-          "examples": [
-            0
-          ]
-        },
-        "f": {
-          "$id": "#/properties/transformMatrix/properties/f",
-          "type": "number",
-          "title": "The F Schema",
-          "default": 0,
-          "examples": [
-            0
-          ]
+const NAME = 'Selia Image Visualizer';
+
+const VERSION = '2.3.0';
+
+const DESCRIPTION = 'Visualizer that uses 2D Canvas context to draw images onto an HTML canvas.';
+
+const CONFIGURATION_SCHEMA = `{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "$id": "http://example.com/example.json",
+    "type": "object",
+    "title": "Selia Image Visualizer Configuration Schema",
+    "description": "This is the JSON schema for the description of the configuration of the Selia Image Visualizer",
+    "default": {},
+    "examples": [
+        {
+            "scale": 1.0,
+            "xOffset": 0.0,
+            "yOffset": 0.0,
+            "rotation": 0.0
         }
-      }
+    ],
+    "required": [
+        "scale",
+        "xOffset",
+        "yOffset",
+        "rotation"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "scale": {
+            "$id": "#/properties/scale",
+            "type": "number",
+            "title": "scale",
+            "description": "This is the relative size of the visualized image with respect to the smaller axis of the visualizer canvas.",
+            "default": 0.0,
+            "examples": [
+                1.0
+            ]
+        },
+        "xOffset": {
+            "$id": "#/properties/xOffset",
+            "type": "number",
+            "title": "The xOffset schema",
+            "description": "This is the relative offset in the x axis with respect to the canvas center. An offset of 0.5 means that the center is half of the canvas width away from its center.",
+            "default": 0.0,
+            "examples": [
+                0.0
+            ]
+        },
+        "yOffset": {
+            "$id": "#/properties/yOffset",
+            "type": "number",
+            "title": "The yOffset schema",
+            "description": "This is the relative offset in the y axis with respect to the canvas center. An offset of 0.5 means that the center is half of the canvas height away from its center.",
+            "default": 0.0,
+            "examples": [
+                0.0
+            ]
+        },
+        "rotation": {
+            "$id": "#/properties/rotation",
+            "type": "number",
+            "title": "The rotation schema",
+            "description": "Rotation of the image with respect to its center. In degrees.",
+            "default": 0.0,
+            "examples": [
+                0.0
+            ]
+        }
     }
-  }
-}
+}`;
 
 export {
   NAME,
   VERSION,
   DESCRIPTION,
-  CONFIGURATION_SCHEMA
-}
+  CONFIGURATION_SCHEMA,
+};

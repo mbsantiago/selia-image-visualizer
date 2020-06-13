@@ -1,50 +1,18 @@
 import React from 'react';
 
 
-const activeButtonClass = 'btn btn-primary m-1';
-const buttonClass = 'btn btn-light m-1';
-const MOVING = 'moving';
-const ZOOMING = 'zooming';
-
-
 class ImageVisualizerToolbar extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.state = {
-      active: props.active,
-      state: props.state,
-    };
-  }
-
-  handleMove() {
-    const { activator, setState } = this.props;
-
-    activator();
-    setState(MOVING);
-    this.setState({
-      active: true,
-      state: MOVING,
-    });
-  }
-
   handleZoomRect() {
-    const { activator, setState } = this.props;
-
+    const { activator, setState, states } = this.props;
     activator();
-    setState(ZOOMING);
-
-    this.setState({
-      active: true,
-      state: ZOOMING,
-    });
+    setState(states.ZOOMING);
   }
 
   renderZoomRectButton() {
-    let className = buttonClass;
-    const { active, state } = this.state;
-    if (active && state === ZOOMING) {
-      className = activeButtonClass;
+    let className = this.props.styles.button.default;
+    const { active, state, states } = this.props;
+    if (active && state === states.ZOOMING) {
+      className = this.props.styles.button.active;
     }
 
     return (
@@ -58,45 +26,14 @@ class ImageVisualizerToolbar extends React.Component {
     );
   }
 
-  renderMoveButton() {
-    let className = buttonClass;
-    const { active, state } = this.state;
-    if (active && state === MOVING) {
-      className = activeButtonClass;
-    }
+  renderZoomPlusButton() {
+    const { zoom } = this.props;
+    let className = this.props.styles.button.default
 
     return (
       <button
         type="button"
         className={className}
-        onClick={() => this.handleMove()}
-      >
-        <i className="fas fa-arrows-alt" />
-      </button>
-    );
-  }
-
-  renderHomeButton() {
-    const { home } = this.props;
-
-    return (
-      <button
-        type="button"
-        className={buttonClass}
-        onClick={() => home()}
-      >
-        <i className="fas fa-home" />
-      </button>
-    );
-  }
-
-  renderZoomPlusButton() {
-    const { zoom } = this.props;
-
-    return (
-      <button
-        type="button"
-        className={buttonClass}
         onClick={() => zoom(2)}
       >
         <i className="fas fa-search-plus" />
@@ -106,11 +43,12 @@ class ImageVisualizerToolbar extends React.Component {
 
   renderZoomMinusButton() {
     const { zoom } = this.props;
+    let className = this.props.styles.button.default
 
     return (
       <button
         type="button"
-        className={buttonClass}
+        className={className}
         onClick={() => zoom(-2)}
       >
         <i className="fas fa-search-minus" />
@@ -118,29 +56,17 @@ class ImageVisualizerToolbar extends React.Component {
     );
   }
 
-  renderBackButton() {
-    const { restoreState } = this.props;
-
-    return (
-      <button
-        type="button"
-        className={buttonClass}
-        onClick={() => restoreState()}
-      >
-        <i className="fas fa-undo" />
-      </button>
-    );
-  }
-
   render() {
+    const { moveButton, homeButton, restoreButton } = this.props;
+
     return (
       <div className="col p-2">
-        {this.renderMoveButton()}
+        {moveButton()}
+        {homeButton()}
+        {restoreButton()}
         {this.renderZoomRectButton()}
-        {this.renderHomeButton()}
         {this.renderZoomPlusButton()}
         {this.renderZoomMinusButton()}
-        {this.renderBackButton()}
       </div>
     );
   }

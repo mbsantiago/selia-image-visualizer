@@ -7,12 +7,20 @@ import {
 } from './ImageVisualizerInfo';
 
 
+// Visualizer restrictions.
 const MAX_SCALE = 50;
 const MIN_SCALE = 0.5;
 const SCALE_FACTOR = 0.05;
-const HISTORY_LENGHT = 20;
 
-const MOVING = 'moving';
+// Base configuration. Used when restoring original view.
+const DEFAULT_CONFIG = {
+  scale: 1.0,
+  xOffset: 0,
+  yOffset: 0,
+  rotation: 0,
+};
+
+// Additional states:
 const ZOOMING = 'zooming';
 
 
@@ -35,21 +43,11 @@ class ImageVisualizer extends VisualizerBase {
     this.image = new Image();
     this.image.src = this.getItemUrl();
 
-    this.stateHistory = [];
-    this.toolbar = React.createRef();
-
     this.last = this.createPoint(0.5, 0.5);
     this.ratio = 1;
     this.imgSize = null;
 
-    this.state = MOVING;
-
-    this.config = {
-      scale: 1.0,
-      xOffset: 0,
-      yOffset: 0,
-      rotation: 0,
-    };
+    this.config = { ...DEFAULT_CONFIG };
 
     this.dragging = {
       point: null,
@@ -62,8 +60,8 @@ class ImageVisualizer extends VisualizerBase {
       active: false,
     };
 
+    // Start drawing at init. Will draw loading spinner until image has finished loading.
     this.draw();
-
     this.image.onload = () => {
       this.imgSize = this.getImgSize();
       this.ratio = this.getRatio();
@@ -71,29 +69,8 @@ class ImageVisualizer extends VisualizerBase {
     };
   }
 
-  saveState() {
-    this.stateHistory.push({ ...this.config });
-
-    if (this.stateHistory.length > HISTORY_LENGHT) {
-      this.stateHistory.shift();
-    }
-  }
-
-  restoreState() {
-    if (this.stateHistory.length > 0) {
-      this.setConfig(this.stateHistory.pop());
-    } else {
-      this.resetConfig();
-    }
-
-    this.draw();
-    this.emitUpdateEvent();
-  }
-
-  discardState() {
-    if (this.stateHistory.length > 0) {
-      this.stateHistory.pop();
-    }
+  getStates() {
+    return { ZOOMING };
   }
 
   draw() {
@@ -103,7 +80,7 @@ class ImageVisualizer extends VisualizerBase {
     }
 
     this.clear();
-    this.setTransformFromState();
+    this.setTransformFromConfig();
     this.drawImage();
 
     if (this.state === ZOOMING && this.zooming.active) {
@@ -159,12 +136,15 @@ class ImageVisualizer extends VisualizerBase {
 
   onWindowResize() {
     this.adjustSize();
-    this.ratio = this.getRatio();
-    this.draw();
-    this.emitUpdateEvent();
+
+    if (this.ready) {
+      this.ratio = this.getRatio();
+      this.draw();
+      this.emitUpdateEvent();
+    }
   }
 
-  setTransformFromState() {
+  setTransformFromConfig() {
     const { width, height } = this.canvas;
     const { scale, xOffset, yOffset, rotation } = this.config;
 
@@ -184,10 +164,6 @@ class ImageVisualizer extends VisualizerBase {
     );
   }
 
-  setState(state) {
-    this.state = state;
-  }
-
   getEvents() {
     return {
       mousedown: this.onMouseDown.bind(this),
@@ -200,20 +176,22 @@ class ImageVisualizer extends VisualizerBase {
   }
 
   onMouseOut() {
-    if (this.state === MOVING) {
+    if (!this.active || !this.ready) return;
+
+    if (this.state === this.states.MOVING) {
       this.dragging.point = null;
     }
   }
 
   onMouseDown(event) {
+    if (!this.active || !this.ready) return;
+
     this.last = this.getMouseEventPosition(event);
 
-    this.canvasToPoint(this.last);
-
-    if (this.state === MOVING) {
+    if (this.state === this.states.MOVING) {
       this.dragging.point = this.last;
       this.dragging.active = false;
-      this.saveState();
+      this.saveConfig();
       return;
     }
 
@@ -223,9 +201,11 @@ class ImageVisualizer extends VisualizerBase {
   }
 
   onMouseMove(event) {
+    if (!this.active || !this.ready) return;
+
     this.last = this.getMouseEventPosition(event);
 
-    if (this.state === MOVING && this.dragging.point) {
+    if (this.state === this.states.MOVING && this.dragging.point) {
       this.translate(
         this.last.x - this.dragging.point.x,
         this.last.y - this.dragging.point.y,
@@ -247,17 +227,18 @@ class ImageVisualizer extends VisualizerBase {
   }
 
   onMouseUp(event) {
-    if (this.state === MOVING) {
+    if (!this.active || !this.ready) return;
+
+    if (this.state === this.states.MOVING) {
       this.dragging.point = null;
       if (!this.dragging.active) {
-        this.discardState();
         this.zoom(event.shiftKey ? -1 : 1, this.last);
       }
       return;
     }
 
-    if (this.state === ZOOMING) {
-      this.saveState();
+    if (this.state === this.states.ZOOMING) {
+      this.saveConfig();
       this.zoomOnRect();
       this.zooming = {
         start: null,
@@ -270,6 +251,8 @@ class ImageVisualizer extends VisualizerBase {
   }
 
   onMouseScroll(event) {
+    if (!this.active || !this.ready) return;
+
     let delta = 0;
     if (event.wheelDelta) {
       delta = event.wheelDelta / 80;
@@ -278,7 +261,7 @@ class ImageVisualizer extends VisualizerBase {
     }
 
     if (delta) {
-      this.saveState();
+      this.saveConfig();
       this.zoom(delta, this.last);
     }
 
@@ -316,42 +299,20 @@ class ImageVisualizer extends VisualizerBase {
     this.ctx.restore();
   }
 
-  resetConfig() {
-    this.config = {
-      scale: 1,
-      xOffset: 0,
-      yOffset: 0,
-      rotation: 0,
-    };
-  }
-
-  centerImage() {
-    this.resetConfig();
-    this.draw();
-    this.emitUpdateEvent();
-  }
-
-  renderToolbar() {
+  getToolbarComponent(props) {
     return (
       <ImageVisualizerToolbar
-        active={this.active}
-        activator={this.activator}
-        state={this.state}
-        setState={(state) => this.setState(state)}
-        home={() => this.centerImage()}
-        restoreState={() => this.restoreState()}
-        zoom={(clicks) => this.zoom(clicks, this.getCenterPoint())}
-        ref={(ref) => { this.toolbar = ref; }}
+        {...props}
+        zoom={(clicks) => {
+          this.saveConfig();
+          this.zoom(clicks, this.getCenterPoint());
+        }}
       />
     );
   }
 
   getCenterPoint() {
     return this.createPoint(0.5, 0.5);
-  }
-
-  getItemUrl() {
-    return this.itemInfo.url;
   }
 
   setScale(scale) {
@@ -414,10 +375,10 @@ class ImageVisualizer extends VisualizerBase {
 
     this.centerOnPoint(center);
     this.setScale(newScale);
-    this.setState(MOVING);
+    this.setState(this.states.MOVING);
 
-    if (this.toolbar.setState) {
-      this.toolbar.setState({ state: MOVING });
+    if (this.toolbarContainer.setState) {
+      this.toolbarContainer.setState({ state: this.states.MOVING });
     }
   }
 
@@ -484,35 +445,19 @@ class ImageVisualizer extends VisualizerBase {
   }
 
   getConfig() {
-    return this.config;
+    return { ...this.config };
   }
 
   setConfig(config) {
-    this.config = config;
+    this.config = { ...config };
+    this.draw();
+    this.emitUpdateEvent();
   }
 
-  activate() {
-    VisualizerBase.prototype.activate.call(this);
-
-    if (this.toolbar.setState) {
-      this.toolbar.setState({ active: true });
-    }
-  }
-
-  deactivate() {
-    VisualizerBase.prototype.deactivate.call(this);
-
-    if (this.toolbar.setState) {
-      this.toolbar.setState({ active: false });
-    }
-  }
-
-  toggleActivate() {
-    VisualizerBase.prototype.toggleActivate.call(this);
-
-    if (this.toolbar.setState) {
-      this.toolbar.setState((prevState) => ({ active: !prevState.active }));
-    }
+  resetConfig() {
+    this.config = { ...DEFAULT_CONFIG };
+    this.draw();
+    this.emitUpdateEvent();
   }
 }
 
