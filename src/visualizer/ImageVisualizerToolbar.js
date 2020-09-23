@@ -2,24 +2,28 @@ import React from 'react';
 
 
 class ImageVisualizerToolbar extends React.Component {
-  handleZoomRect() {
+  handleZoomRectClick() {
     const { activator, setState, states } = this.props;
+    // Activate visualizer
     activator();
+
+    // Set visualizer state to zooming.
     setState(states.ZOOMING);
   }
 
   renderZoomRectButton() {
-    let className = this.props.styles.button.default;
-    const { active, state, states } = this.props;
+    const { active, state, states, styles } = this.props;
+    let className = styles.button.default;
+
     if (active && state === states.ZOOMING) {
-      className = this.props.styles.button.active;
+      className = styles.button.active;
     }
 
     return (
       <button
         type="button"
         className={className}
-        onClick={() => this.handleZoomRect()}
+        onClick={() => this.handleZoomRectClick()}
       >
         <i className="fas fa-expand" />
       </button>
